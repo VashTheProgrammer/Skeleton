@@ -23,8 +23,6 @@
 #define UART0_BAUD_RATE 115200
 #define UART1_BAUD_RATE 5000000
 
-// CLOCK_PER_SEC in RP2040 è 100 !
-
 #define BUFFER_SIZE 2048 // Dimensione del buffer circolare
 
 // Buffer circolare
@@ -61,12 +59,12 @@ void on_uart1_rx() {
 
 bool led_on = false;
 
-void task_1(void){
+void task_0(void){
     led_on = !led_on;
     gpio_put(LED_PIN, led_on);
 }
 
-void task_2(void){
+void task_1(void){
     
     // Leggi dal buffer e invia alla UART0
     if (uart_is_writable(uart0)) {
@@ -93,7 +91,7 @@ CommandNode *command_list = NULL;
 at_command_state_t current_state = STATE_SEND_AT_READY; // primo stato valido
 int at_command_counter = 0;
 
-void task_3(void){
+void task_2(void){
         process_command_sequence(command_list, &current_state, &at_command_counter);
 }
 
@@ -139,10 +137,12 @@ int main()
     // Initialize command sequence
     initialize_command_sequence(&command_list, &iot_config);
 
-    // Aggiungi alcuni task allo scheduler
-    scheduler_add_task(task_1, 2, 50);       // Priorità 2, intervallo 50 ticks -> 500 millisec
-    scheduler_add_task(task_2, 1, 0.1);      // Priorità 1, intervallo 0.1 ticks -> 1 millisec
-    scheduler_add_task(task_3, 3, 500);      // Priorità 3, intervallo 500 ticks -> 5000 millisec
+    // Aggiungi alcuni task allo scheduler (interval in usec)
+    scheduler_add_task("led", task_0, 2, 500 * 1000);             // 0 
+    scheduler_add_task("uart bridge", task_1, 1, 1 * 1000);       // 1
+    scheduler_add_task("cmd seq", task_2, 3, 5 * 1000 * 1000);    // 2
+
+    set_debug_for_task(2, true);
 
     // Avvia lo scheduler (loop)
     scheduler_run();
