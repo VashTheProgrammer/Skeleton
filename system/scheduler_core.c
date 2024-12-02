@@ -134,8 +134,6 @@ void scheduler_run(void) {
                     debug_buffer_add("Task %s: DEADLINE MISSED\n", task_list[i].name);
                 }
 
-                debug_buffer_add("Task %s: Tempo di esecuzione = %lld us, Tempo totale = %lld us\n", task_list[i].name, task_time, task_list[i].total_time);
-
                 // Aggiorna il tempo di esecuzione massimo e medio
                 if (task_time > max_execution_time[i]) {
                     max_execution_time[i] = task_time;
@@ -144,8 +142,9 @@ void scheduler_run(void) {
                 total_execution_time[i] += task_time;
                 execution_count[i]++;
                 int64_t average_execution_time = total_execution_time[i] / execution_count[i];
-
-                debug_buffer_add("Task: \" %s \": Tempo massimo di esecuzione = %lld us, Tempo medio di esecuzione = %lld us\n", task_list[i].name, max_execution_time[i], average_execution_time);
+                
+                debug_buffer_add("Task \"%s\", Prio: %d \nTempo di esecuzione = %lld us, Tempo totale = %lld us\n", task_list[i].name, task_list[i].dynamic_priority, task_time, task_list[i].total_time);
+                debug_buffer_add("Tempo massimo di esecuzione = %lld us, Tempo medio di esecuzione = %lld us\n", task_list[i].name, max_execution_time[i], average_execution_time);
 
                 // Calcola e aggiungi il carico del sistema al buffer di debug
                 int64_t current_system_time = to_us_since_boot(get_absolute_time());

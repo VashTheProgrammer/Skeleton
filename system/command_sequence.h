@@ -4,6 +4,7 @@
 
 #include "config.h"
 typedef enum {
+    STATE_SEND_RST,
     STATE_SEND_AT_READY,
     STATE_SEND_AT_GMR,
     STATE_SEND_AT_CWMODE,
@@ -11,12 +12,14 @@ typedef enum {
     STATE_SEND_AT_WIFI_CONNECT,
     STATE_SEND_AT_LIST_AP,
     STATE_SEND_AT_IP,
+    STATE_MQTT_CONFIG,
+    STATE_MQTT_CON,
     STATE_IDLE,
 } at_command_state_t;
 
 typedef struct {
     at_command_state_t state;
-    char command[256];
+    char command[512];
     const char *message;
     at_command_state_t next_state;
 } at_command_t;

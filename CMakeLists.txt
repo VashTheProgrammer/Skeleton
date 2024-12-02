@@ -36,9 +36,11 @@ pico_sdk_init()
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(RT 
-    RT.c
+    main.c
+    init.c
     system/command_sequence.c 
     system/scheduler_core.c
+    system/initcalls.c
     config/A_conf.c
     )
 

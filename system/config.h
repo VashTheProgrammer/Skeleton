@@ -9,8 +9,10 @@ typedef struct {
     char wifi_ssid[32];
     char wifi_password[32];
     char device_id[32];
+    char hostname[64];
     char username[128];
     char password[128];
+    char sas[256];
 } iot_config_t;
 
 extern iot_config_t iot_config;
