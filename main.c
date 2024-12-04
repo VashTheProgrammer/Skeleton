@@ -6,6 +6,7 @@
 #include "config.h"
 #include "scheduler.h"
 #include "initcalls.h"
+#include "hardware_config.h"
 
 #define BUFFER_SIZE 2048 // Dimensione del buffer circolare
 
@@ -81,6 +82,10 @@ void task_2(void){
 
 int main()
 {
+
+    // Seleziona la configurazione hardware attuale
+    select_hardware_config();
+
     // Itera sull'array delle initcall ed esegui ogni funzione
     for (int i = 0; i < initcall_count; i++) {
         initcall_list[i].init_func();

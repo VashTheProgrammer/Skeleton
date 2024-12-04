@@ -33,8 +33,10 @@ project(RT C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
+# Cambia HARDWARE_DEFAULT con HARDWARE_V2 per cambiare la versione hardware
+add_definitions(-DHARDWARE_DEFAULT)
 
+# Add executable. Default name is the project name, version 0.1
 add_executable(RT 
     main.c
     init.c
@@ -42,6 +44,7 @@ add_executable(RT
     system/scheduler_core.c
     system/initcalls.c
     config/A_conf.c
+    platform/hardware.c
     )
 
 pico_set_program_name(RT "RT")
@@ -59,6 +62,7 @@ target_link_libraries(RT
 # Add the standard include files to the build
 target_include_directories(RT PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/system
+  ${CMAKE_CURRENT_LIST_DIR}/platform
 )
 
 pico_add_extra_outputs(RT)
