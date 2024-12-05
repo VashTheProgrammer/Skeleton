@@ -19,4 +19,6 @@ extern int initcall_count;
         } \
     }
 
+void initcalls(void);
+
 #endif // INITCALLS_H

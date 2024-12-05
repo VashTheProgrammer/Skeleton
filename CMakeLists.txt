@@ -39,7 +39,6 @@ add_definitions(-DHARDWARE_DEFAULT)
 # Add executable. Default name is the project name, version 0.1
 add_executable(RT 
     main.c
-    init.c
     system/command_sequence.c 
     system/scheduler_core.c
     system/initcalls.c
@@ -48,6 +47,8 @@ add_executable(RT
     platform/hardware.c
     platform/driver_led.c
     app/task_led.c
+    app/task_serial_bridge.c
+    app/task_at_sequence.c
     )
 
 pico_set_program_name(RT "RT")
