@@ -8,6 +8,8 @@
 #include "initcalls.h"
 #include "hardware_config.h"
 
+#include "task_led.h"
+
 #define BUFFER_SIZE 2048 // Dimensione del buffer circolare
 
 // Buffer circolare
@@ -40,13 +42,6 @@ void on_uart1_rx() {
         uint8_t data = uart_getc(uart1); 
         buffer_put(data); // Aggiungi il dato al buffer 
     }
-}
-
-bool led_on = false;
-
-void task_0(void){
-    led_on = !led_on;
-    gpio_put(25, led_on);
 }
 
 void task_1(void){
@@ -101,7 +96,7 @@ int main()
 
     // Aggiungi alcuni task allo scheduler
     // (name, function, prio, usec)
-    scheduler_add_task("led", task_0, 2, 500 * 1000);             // 0 
+    scheduler_add_task("led", task_led, 2, 500 * 1000);           // 0 
     scheduler_add_task("uart bridge", task_1, 1, 1 * 1000);       // 1
     scheduler_add_task("cmd seq", task_2, 3, 5 * 1000 * 1000);    // 2
 

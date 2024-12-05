@@ -8,13 +8,6 @@
 #define STOP_BITS 1
 #define PARITY    UART_PARITY_NONE
 
-void init_gpio_led(void) {
-    gpio_init(hw_config->led_pin);
-    gpio_set_dir(hw_config->led_pin, GPIO_OUT);
-}
-REGISTER_INITCALL(init_gpio_led);
-
-
 void init_system(void) {
     stdio_init_all();
 }

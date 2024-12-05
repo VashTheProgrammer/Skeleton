@@ -18,7 +18,7 @@ const HardwareConfig hardware_v1 = {
 
     .led_pin = 25,
     .esp32_rst_pin = 6,
-    .extra_gpio1 = -1,
+    .extra_gpio1 = 26,
 };
 
 // Definizione della configurazione per hardware V2

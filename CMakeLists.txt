@@ -43,8 +43,11 @@ add_executable(RT
     system/command_sequence.c 
     system/scheduler_core.c
     system/initcalls.c
+    system/circular_buffer.c
     config/A_conf.c
     platform/hardware.c
+    platform/driver_led.c
+    app/task_led.c
     )
 
 pico_set_program_name(RT "RT")
@@ -57,12 +60,15 @@ pico_enable_stdio_usb(RT 0)
 # Add the standard library to the build
 target_link_libraries(RT
         pico_stdlib
-        pico_multicore)
+        pico_multicore
+        hardware_pwm
+        )
 
 # Add the standard include files to the build
 target_include_directories(RT PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/system
   ${CMAKE_CURRENT_LIST_DIR}/platform
+  ${CMAKE_CURRENT_LIST_DIR}/app
 )
 
 pico_add_extra_outputs(RT)
