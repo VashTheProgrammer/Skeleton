@@ -1,79 +1,174 @@
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
+
 #include "scheduler.h"
 
-#define MAX_TASKS 10 // Definizione del numero massimo di task
+// -----------------------------------------------------------------------------
+// Configurazioni e Limiti
+// -----------------------------------------------------------------------------
+#define MAX_TASKS               10
+#define DEBUG_BUFFER_SIZE       2048
+#define DEBUG_FLUSH_INTERVAL_US 5000000  // Flush ogni 5 secondi
+#define DEADLINE_MISS_THRESHOLD 10       // Ignora ritardi inferiori a 10µs
+#define LOG_LEVEL_DEFAULT       LOG_LEVEL_INFO
 
-#include <time.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdbool.h>
+// -----------------------------------------------------------------------------
+// Variabili Statistiche e di Stato
+// -----------------------------------------------------------------------------
+static task_t task_list[MAX_TASKS];
+static int    task_count = 0;
 
-// Buffer circolare per memorizzare i messaggi di debug
-#define DEBUG_BUFFER_SIZE 2048
-static char debug_buffer[DEBUG_BUFFER_SIZE];
-static int debug_buffer_index = 0;
+static char   debug_buffer[DEBUG_BUFFER_SIZE];
+static int    debug_buffer_index = 0;
 static absolute_time_t last_debug_flush_time;
 
-// Selezione dei task per il debug
-static bool debug_enabled_for_task[MAX_TASKS] = {false};
+static log_level_t global_log_level = LOG_LEVEL_DEFAULT;
+static int64_t global_total_task_time = 0;
+static sched_algorithm_t selected_algorithm = SCHED_ALGO_PRIORITY;
+static int priority_normalization_counter = 0; // Contatore per normalizzazione
 
-// Variabili per il debug dei task
-static int64_t max_execution_time[MAX_TASKS] = {0};
-static int64_t total_execution_time[MAX_TASKS] = {0};
-static int execution_count[MAX_TASKS] = {0};
-
-static task_t task_list[MAX_TASKS];   // Array per memorizzare i task
-static int task_count = 0;            // Contatore del numero di task registrati
-
-// Funzione per aggiungere messaggi al buffer di debug
-void debug_buffer_add(const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
+// -----------------------------------------------------------------------------
+// Funzioni di Logging e Debug
+// -----------------------------------------------------------------------------
+static void debug_buffer_add_raw(const char *fmt, va_list args) {
     int n = vsnprintf(&debug_buffer[debug_buffer_index], DEBUG_BUFFER_SIZE - debug_buffer_index, fmt, args);
-    va_end(args);
-
-    if (n > 0) {
-        debug_buffer_index = (debug_buffer_index + n) % DEBUG_BUFFER_SIZE;
+    if (n > 0 && debug_buffer_index + n < DEBUG_BUFFER_SIZE) {
+        debug_buffer_index += n;
+    } else {
+        debug_buffer_index = 0; // Reset in caso di overflow
     }
 }
 
-// Funzione per stampare il buffer di debug
-void debug_buffer_flush(void) {
+static void debug_log(log_level_t level, const char *fmt, ...) {
+    if (level > global_log_level) return;
+    absolute_time_t now = get_absolute_time();
+    int64_t ts_us = to_us_since_boot(now);
+
+    char prefix[64];
+    int p_len = snprintf(prefix, sizeof(prefix), "[%lldus][%d] ", ts_us, level);
+    if (p_len > 0 && p_len < DEBUG_BUFFER_SIZE - debug_buffer_index) {
+        memcpy(&debug_buffer[debug_buffer_index], prefix, p_len);
+        debug_buffer_index += p_len;
+    }
+
+    va_list args;
+    va_start(args, fmt);
+    debug_buffer_add_raw(fmt, args);
+    va_end(args);
+}
+
+static void debug_buffer_flush(void) {
     absolute_time_t current_time = get_absolute_time();
-    if (absolute_time_diff_us(last_debug_flush_time, current_time) >= 5000000) { // Flush ogni 5 secondi
-        printf("%s", debug_buffer);
-        debug_buffer_index = 0;
+    if (absolute_time_diff_us(last_debug_flush_time, current_time) >= DEBUG_FLUSH_INTERVAL_US) {
+        if (debug_buffer_index > 0) {
+            printf("%.*s", debug_buffer_index, debug_buffer);
+            debug_buffer_index = 0;
+        }
         last_debug_flush_time = current_time;
     }
 }
 
-// Funzione per aggiungere un task allo scheduler
-void scheduler_add_task(const char *name, task_func_t task, int priority, int64_t interval) {
-    if (task_count < MAX_TASKS) {
-        task_list[task_count].task = task;
-        task_list[task_count].priority = priority;
-        task_list[task_count].interval = interval;
-        task_list[task_count].last_execution = make_timeout_time_us(0);
-        task_list[task_count].total_time = 0;
-        task_list[task_count].dynamic_priority = priority; // Priorità dinamica inizializzata
-        task_list[task_count].name = name;
-        task_count++;
-    } else {
-        printf("Impossibile aggiungere il task: limite massimo raggiunto.\n");
+// -----------------------------------------------------------------------------
+// Funzioni di Gestione dei Task
+// -----------------------------------------------------------------------------
+sched_error_t scheduler_add_task(const char *name, task_func_t task, int priority, int64_t interval) {
+    if (task_count >= MAX_TASKS) {
+        debug_log(LOG_LEVEL_ERROR, "Impossibile aggiungere il task: limite massimo raggiunto.\n");
+        return SCHED_ERR_FULL;
+    }
+    if (task == NULL || interval <= 0) {
+        debug_log(LOG_LEVEL_ERROR, "Impossibile aggiungere il task: parametri non validi.\n");
+        return SCHED_ERR_INVALID_PARAMS;
+    }
+
+    task_t *t = &task_list[task_count];
+    memset(t, 0, sizeof(task_t));
+    t->task = task;
+    t->priority = priority;
+    t->interval = interval;
+    t->last_execution = make_timeout_time_us(0);
+    t->name = name;
+
+    task_count++;
+    return SCHED_ERR_OK;
+}
+
+sched_error_t scheduler_set_task_debug(int task_index, bool enabled) {
+    if (task_index < 0 || task_index >= task_count) return SCHED_ERR_INVALID_INDEX;
+    task_list[task_index].debug_enabled = enabled;
+    return SCHED_ERR_OK;
+}
+
+sched_error_t scheduler_set_task_priority(int task_index, int new_priority) {
+    if (task_index < 0 || task_index >= task_count) return SCHED_ERR_INVALID_INDEX;
+    task_list[task_index].priority = new_priority;
+    task_list[task_index].dynamic_priority = new_priority;
+    return SCHED_ERR_OK;
+}
+
+sched_error_t scheduler_set_task_interval(int task_index, int64_t new_interval) {
+    if (task_index < 0 || task_index >= task_count) return SCHED_ERR_INVALID_INDEX;
+    task_list[task_index].interval = new_interval;
+    return SCHED_ERR_OK;
+}
+
+sched_error_t scheduler_get_task_stats(int task_index, task_stats_t *stats) {
+    if (task_index < 0 || task_index >= task_count || stats == NULL) return SCHED_ERR_INVALID_INDEX;
+
+    task_t *t = &task_list[task_index];
+    *stats = (task_stats_t){
+        .name = t->name,
+        .priority = t->priority,
+        .dynamic_priority = t->dynamic_priority,
+        .interval = t->interval,
+        .total_time = t->total_time,
+        .max_exec_time = t->max_exec_time,
+        .exec_count = t->exec_count,
+        .deadline_miss_count = t->deadline_miss_count,
+        .max_jitter = t->max_jitter,
+        .avg_exec_time = (t->exec_count > 0) ? (t->total_exec_time / t->exec_count) : 0
+    };
+    return SCHED_ERR_OK;
+}
+
+void scheduler_set_log_level(log_level_t level) {
+    global_log_level = level;
+}
+
+void scheduler_set_algorithm(sched_algorithm_t algorithm) {
+    selected_algorithm = algorithm;
+}
+
+// -----------------------------------------------------------------------------
+// Normalizzazione delle Priorità Dinamiche
+// -----------------------------------------------------------------------------
+/**
+ * Normalizza le priorità dinamiche dei task riportandole al valore iniziale.
+ * Questo previene possibili overflow numerici o squilibri a lungo termine
+ * nella gestione dei task quando si usa l'algoritmo a priorità.
+ */
+static void normalize_dynamic_priorities(void) {
+    for (int i = 0; i < task_count; i++) {
+        task_list[i].dynamic_priority = task_list[i].priority;
     }
 }
 
-// Funzione per trovare il prossimo task con la priorita' piu' alta
-int find_highest_priority_task(void) {
+// -----------------------------------------------------------------------------
+// Implementazioni degli Algoritmi di Scheduling
+// -----------------------------------------------------------------------------
+static int find_highest_priority_task(void) {
     int highest_priority_index = -1;
     int highest_priority = -1;
     absolute_time_t current_time = get_absolute_time();
 
     for (int i = 0; i < task_count; i++) {
-        // Controlla se il task è pronto per essere eseguito
-        if (task_list[i].task && absolute_time_diff_us(task_list[i].last_execution, current_time) >= task_list[i].interval) {
-            // Se la priorita' è più alta, seleziona questo task
+        int64_t since_last = absolute_time_diff_us(task_list[i].last_execution, current_time);
+        if (task_list[i].task && since_last >= task_list[i].interval) {
             if (task_list[i].dynamic_priority > highest_priority) {
                 highest_priority = task_list[i].dynamic_priority;
                 highest_priority_index = i;
@@ -81,86 +176,135 @@ int find_highest_priority_task(void) {
         }
     }
 
-    // Aumenta la priorita' dinamica dei task che non sono stati selezionati (per evitare starvation)
-    for (int i = 0; i < task_count; i++) {
-        if (i != highest_priority_index) {
-            task_list[i].dynamic_priority++;
+    if (highest_priority_index != -1) {
+        for (int i = 0; i < task_count; i++) {
+            if (i != highest_priority_index) task_list[i].dynamic_priority++;
         }
+    }
+
+    // Incrementa il contatore e normalizza se necessario
+    if (++priority_normalization_counter >= 100) { // Normalizza ogni 100 iterazioni
+        normalize_dynamic_priorities();
+        priority_normalization_counter = 0;
     }
 
     return highest_priority_index;
 }
 
-// Funzione per abilitare o disabilitare il debug per un task specifico
-void set_debug_for_task(int task_index, bool enabled) {
-    if (task_index >= 0 && task_index < MAX_TASKS) {
-        debug_enabled_for_task[task_index] = enabled;
+static int find_round_robin_task(void) {
+    static int last_task_index = -1;
+    for (int i = 0; i < task_count; i++) {
+        int current_index = (last_task_index + 1 + i) % task_count;
+        int64_t since_last = absolute_time_diff_us(task_list[current_index].last_execution, get_absolute_time());
+        if (task_list[current_index].task && since_last >= task_list[current_index].interval) {
+            last_task_index = current_index;
+            return current_index;
+        }
+    }
+    return -1;
+}
+
+static int find_earliest_deadline_task(void) {
+    int earliest_index = -1;
+    int64_t earliest_deadline = INT64_MAX;
+    absolute_time_t current_time = get_absolute_time();
+
+    for (int i = 0; i < task_count; i++) {
+        int64_t deadline = to_us_since_boot(task_list[i].last_execution) + task_list[i].interval;
+        int64_t since_last = absolute_time_diff_us(task_list[i].last_execution, current_time);
+
+        if (task_list[i].task && since_last >= task_list[i].interval && deadline < earliest_deadline) {
+            earliest_deadline = deadline;
+            earliest_index = i;
+        }
+    }
+
+    return earliest_index;
+}
+
+static int select_next_task(void) {
+    switch (selected_algorithm) {
+        case SCHED_ALGO_PRIORITY:
+            return find_highest_priority_task();
+        case SCHED_ALGO_ROUND_ROBIN:
+            return find_round_robin_task();
+        case SCHED_ALGO_EARLIEST_DEADLINE_FIRST:
+            return find_earliest_deadline_task();
+        default:
+            return -1;
     }
 }
 
-// Funzione principale dello scheduler
+// -----------------------------------------------------------------------------
+// Funzione Principale dello Scheduler
+// -----------------------------------------------------------------------------
 void scheduler_run(void) {
     last_debug_flush_time = get_absolute_time();
 
     while (1) {
-        int task_index = find_highest_priority_task();
+        int task_index = select_next_task();
 
-        // Esegui il task con la priorita' piu' alta trovato
         if (task_index != -1) {
-            int i = task_index;
-            absolute_time_t current_time = get_absolute_time();
-
-            // Misura il tempo di start del task
+            task_t *t = &task_list[task_index];
             absolute_time_t start_time = get_absolute_time();
 
-            // Esegui il task corrente
-            task_list[i].task();
+            int64_t expected_start = to_us_since_boot(t->last_execution) + t->interval;
+            int64_t actual_start = to_us_since_boot(start_time);
+            int64_t jitter = actual_start - expected_start;
+            if (jitter < 0) jitter = 0;
+            if (jitter > t->max_jitter) t->max_jitter = jitter;
 
-            // Misura il tempo di fine e calcola il tempo totale di esecuzione
+            t->task();
+
             absolute_time_t end_time = get_absolute_time();
             int64_t task_time = absolute_time_diff_us(start_time, end_time);
 
-            // Aggiorna il tempo totale di esecuzione del task
-            task_list[i].total_time += task_time;
-            task_list[i].last_execution = current_time;
+            t->total_time += task_time;
+            t->last_execution = end_time;
+            t->dynamic_priority = t->priority;
+            if (task_time > t->max_exec_time) t->max_exec_time = task_time;
+            t->total_exec_time += task_time;
+            t->exec_count++;
 
-            // Aggiorna la priorita' dinamica del task (reset alla priorita' originale)
-            task_list[i].dynamic_priority = task_list[i].priority;
+            if ((actual_start - expected_start) > DEADLINE_MISS_THRESHOLD) {
+                t->deadline_miss_count++;
+            }
 
-            // Aggiungi il tempo di esecuzione del task al buffer di debug se il debug è abilitato per questo task
-            if (debug_enabled_for_task[i]) {
-                // Verifica se il task ha mancato la deadline
-                if (absolute_time_diff_us(task_list[i].last_execution, current_time) > task_list[i].interval) {
-                    debug_buffer_add("Task %s: DEADLINE MISSED\n", task_list[i].name);
-                }
+            global_total_task_time += task_time;
 
-                // Aggiorna il tempo di esecuzione massimo e medio
-                if (task_time > max_execution_time[i]) {
-                    max_execution_time[i] = task_time;
-                }
-
-                total_execution_time[i] += task_time;
-                execution_count[i]++;
-                int64_t average_execution_time = total_execution_time[i] / execution_count[i];
-                
-                debug_buffer_add("Task \"%s\", Prio: %d \nTempo di esecuzione = %lld us, Tempo totale = %lld us\n", task_list[i].name, task_list[i].dynamic_priority, task_time, task_list[i].total_time);
-                debug_buffer_add("Tempo massimo di esecuzione = %lld us, Tempo medio di esecuzione = %lld us\n", task_list[i].name, max_execution_time[i], average_execution_time);
-
-                // Calcola e aggiungi il carico del sistema al buffer di debug
+            if (t->debug_enabled) {
                 int64_t current_system_time = to_us_since_boot(get_absolute_time());
-                double cpu_usage_percentage = ((double)task_list[i].total_time / (double)current_system_time) * 100.0;
+                double cpu_usage_percentage = ((double)t->total_time / (double)current_system_time) * 100.0;
+                double global_cpu_usage = ((double)global_total_task_time / (double)current_system_time) * 100.0;
 
-                debug_buffer_add("Utilizzo CPU: %.2f%%, Tempo sistema totale: %lld us\n", cpu_usage_percentage, current_system_time);
-
-                // Aggiungi la disponibilità residua al buffer di debug
-                debug_buffer_add("Disponibilità residua CPU: %.2f%%\n", 100.0 - cpu_usage_percentage);
+                debug_log(LOG_LEVEL_DEBUG, "Task \"%s\" eseguito.\n", t->name);
+                debug_log(LOG_LEVEL_INFO,
+                          "Task \"%s\" Prio:%d ExecTime:%lld us TotTime:%lld us MaxExec:%lld us AvgExec:%lld us JitterMax:%lld us\n",
+                          t->name, t->dynamic_priority, task_time, t->total_time, t->max_exec_time, t->total_exec_time / t->exec_count, t->max_jitter);
+                debug_log(LOG_LEVEL_INFO,
+                          "CPU Usage Task:%s=%.2f%% CPU Usage Globale=%.2f%%\n",
+                          t->name, cpu_usage_percentage, global_cpu_usage);
             }
         } else {
-            // Se nessun task è pronto, metti la CPU in sleep per risparmiare energia
-            sleep_ms(1);
+            // sleep_ms(1); // Pausa breve se nessun task è pronto, lo tolgo cosi abbasso il jitter ma aumenteranno i consumi (mW)
         }
 
-        // Stampa il buffer di debug periodicamente
         debug_buffer_flush();
     }
+}
+
+// -----------------------------------------------------------------------------
+// Funzioni di Servizio
+// -----------------------------------------------------------------------------
+void scheduler_print_all_tasks_stats(void) {
+    for (int i = 0; i < task_count; i++) {
+        task_stats_t stats;
+        if (scheduler_get_task_stats(i, &stats) == SCHED_ERR_OK) {
+            debug_log(LOG_LEVEL_INFO,
+                      "Task \"%s\" prio:%d dyn_prio:%d interval:%lld us tot_time:%lld us max_exec:%lld us avg_exec:%lld us exec_count:%d deadline_miss:%d max_jitter:%lld\n",
+                      stats.name, stats.priority, stats.dynamic_priority, stats.interval, stats.total_time,
+                      stats.max_exec_time, stats.avg_exec_time, stats.exec_count, stats.deadline_miss_count, stats.max_jitter);
+        }
+    }
+    debug_buffer_flush();
 }
