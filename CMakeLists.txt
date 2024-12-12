@@ -43,12 +43,15 @@ add_executable(RT
     system/scheduler_core.c
     system/initcalls.c
     system/circular_buffer.c
+    system/terminal.c
     config/A_conf.c
     platform/hardware.c
     platform/driver_led.c
     app/task_led.c
     app/task_serial_bridge.c
     app/task_at_sequence.c
+    app/task_terminal.c
+    app/commands.c
     )
 
 pico_set_program_name(RT "RT")

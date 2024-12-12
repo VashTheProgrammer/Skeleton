@@ -43,7 +43,7 @@ int main()
     if (scheduler_add_task("led", task_led, 2, 500 * 1000) != SCHED_ERR_OK) {
         printf("Errore nell'aggiunta di Blink.\n");
     }
-
+/*
     // Aggiungiamo un task sensori con priorità più alta (3) e intervallo corto (1 ms)
     if (scheduler_add_task("serial_bridge", task_serial_bridge, 3, 1 * 1000) != SCHED_ERR_OK) {
         printf("Errore nell'aggiunta di serial_bridge.\n");
@@ -53,10 +53,10 @@ int main()
     if (scheduler_add_task("at_sequence", task_at_sequence, 1, 5 * 1000 * 1000) != SCHED_ERR_OK) {
         printf("Errore nell'aggiunta di task_at_sequence.\n");
     }
-
+*/
     // Abilitiamo il debug per il task "led" (che è il secondo task aggiunto, indice 1)
     // Di default è già false
-    scheduler_set_task_debug(0, true);
+    scheduler_set_task_debug(0, false);
     scheduler_set_task_debug(1, false);
     scheduler_set_task_debug(2, false);
 

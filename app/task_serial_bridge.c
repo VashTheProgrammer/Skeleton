@@ -7,6 +7,8 @@
 
 #include "hardware_config.h"
 
+
+/*
 #define DATA_BITS 8
 #define STOP_BITS 1
 #define PARITY    UART_PARITY_NONE
@@ -96,3 +98,6 @@ void task_serial_bridge(void){
         }
     }
 }
+*/
+
+void task_serial_bridge(void){}
