@@ -9,9 +9,9 @@
 // Declare static instances for LED drivers
 static DriverLed leds[2];
 
-// Struttura dati del mio task
+// Struttura dati del mio task (Esempio)
 typedef struct {
-    int buffer[256]; // 256 * 4 = 1024 byte (assuming int=4 byte)
+    int buffer[512]; // 256 * 4 = 1024 byte (assuming int=4 byte)
     struct {
         char name[32];
         int value;
@@ -22,7 +22,6 @@ static task_led_static_mem_t led_data; // istanza statica della struttura
 
 void task_led(void) {
     leds[0].toggle(&leds[0]);
-    
 }
 
 void task_led_init(void) {
@@ -32,8 +31,8 @@ void task_led_init(void) {
     initialize_driver_led(&leds[1], hw_config->extra_gpio1); // Assign pin 26 to led2
 
     // Parametri: nome, funzione, priorità, intervallo in microsecondi, uso di memoria statica
-    if (scheduler_add_task("led", task_led, 0, 500 * 1000, sizeof(task_led_static_mem_t)) != SCHED_ERR_OK) {
-        printf("Errore nell'aggiunta di Blink.\n");
+    if (scheduler_add_task("led01", task_led, 1, 500 * 1000, TASK_RUNNING ,sizeof(task_led_static_mem_t)) != SCHED_ERR_OK) {
+        printf("[LED TASK][ERROR] Errore nell'aggiunta di Blink.\n");
     }
 }
 REGISTER_INITCALL(task_led_init);

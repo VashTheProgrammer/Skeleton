@@ -34,7 +34,7 @@ void uart_irq_handler() {
         } else if (uart_rx_index < UART_RX_BUFFER_SIZE - 1) {
             uart_rx_buffer[uart_rx_index++] = c; // Accumula il carattere
         } else {
-            printf("Errore: buffer UART pieno.\n");
+            printf("[SYSTEM][ERROR] Buffer UART full.\n");
             uart_rx_index = 0; // Resetta l'indice
         }
     }

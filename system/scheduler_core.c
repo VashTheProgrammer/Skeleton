@@ -13,7 +13,7 @@
 // -----------------------------------------------------------------------------
 static task_t task_list[MAX_TASKS];
 static int    task_count = 0;
-static sched_algorithm_t selected_algorithm = SCHED_ALGO_PRIORITY;
+static sched_algorithm_t selected_algorithm = SCHED_ALGO_ROUND_ROBIN;
 static int    priority_normalization_counter = 0;  // Contatore per la normalizzazione delle priorità
 static int64_t global_total_task_time = 0;          // Tempo totale accumulato dai task
 
@@ -59,7 +59,7 @@ static int calculate_stack_usage(const uint8_t *stack, size_t size) {
 // -----------------------------------------------------------------------------
 // Funzioni di Gestione dei Task
 // -----------------------------------------------------------------------------
-sched_error_t scheduler_add_task(const char *name, task_func_t task, int priority, int64_t interval, size_t static_memory_size) {
+sched_error_t scheduler_add_task(const char *name, task_func_t task, int priority, int64_t interval, task_state_t state, size_t static_memory_size) {
     if (task_count >= MAX_TASKS) {
         // Errore se si supera il numero massimo di task
         return SCHED_ERR_FULL;
@@ -72,7 +72,7 @@ sched_error_t scheduler_add_task(const char *name, task_func_t task, int priorit
     task_t *t = &task_list[task_count];
     memset(t, 0, sizeof(task_t));
     t->task = task;
-    t->state = TASK_RUNNING;
+    t->state = state;
     t->priority = priority;
     t->dynamic_priority = priority;
     t->interval = interval;
@@ -104,12 +104,58 @@ sched_error_t scheduler_set_task_interval(int task_index, int64_t new_interval) 
 sched_error_t scheduler_pause_task(int task_index) {
     if (task_index < 0 || task_index >= task_count) return SCHED_ERR_INVALID_INDEX;
     task_list[task_index].state = TASK_PAUSED;
+
+    // Reset delle statistiche del jitter
+    task_list[task_index].total_jitter = 0;
+    task_list[task_index].max_jitter = 0;
+
+    // Aggiorna il tempo dell'ultima esecuzione per evitare calcoli di jitter errati
+    task_list[task_index].last_execution = get_absolute_time();
+
     return SCHED_ERR_OK;
 }
 
 sched_error_t scheduler_resume_task(int task_index) {
     if (task_index < 0 || task_index >= task_count) return SCHED_ERR_INVALID_INDEX;
     task_list[task_index].state = TASK_RUNNING;
+
+    // Reset delle statistiche del jitter
+    task_list[task_index].total_jitter = 0;
+    task_list[task_index].max_jitter = 0;
+
+    // Aggiorna il tempo dell'ultima esecuzione per evitare calcoli di jitter errati
+    task_list[task_index].last_execution = get_absolute_time();
+
+    return SCHED_ERR_OK;
+}
+
+sched_error_t scheduler_set_algorithm(sched_algorithm_t algorithm) {
+    // Metti in pausa tutti i task
+    for (int i = 0; i < task_count; i++) {
+        task_list[i].state = TASK_PAUSED;
+    }
+
+    // Cambia l'algoritmo dello scheduler
+    selected_algorithm = algorithm;
+
+    // Resetta tutte le statistiche dei task
+    for (int i = 0; i < task_count; i++) {
+        task_t *t = &task_list[i];
+        t->exec_count = 0;
+        t->total_time = 0;
+        t->total_exec_time = 0;
+        t->max_exec_time = 0;
+        t->min_exec_time = INT64_MAX;
+        t->total_jitter = 0;
+        t->max_jitter = 0;
+        t->last_execution = get_absolute_time();
+    }
+
+    // Riporta i task in stato RUNNING
+    for (int i = 0; i < task_count; i++) {
+        task_list[i].state = TASK_RUNNING;
+    }
+
     return SCHED_ERR_OK;
 }
 
@@ -125,6 +171,8 @@ static void normalize_dynamic_priorities(void) {
 // -----------------------------------------------------------------------------
 // Implementazioni degli Algoritmi di Scheduling
 // -----------------------------------------------------------------------------
+
+// La ALGO PRIORITY E' L'UNICA CHE USA IL MECCANISMO  DELLA PRIORITA'
 static int find_highest_priority_task(absolute_time_t current_time) {
     int highest_priority_index = -1;
     int highest_priority = -1;
@@ -233,7 +281,7 @@ void scheduler_run(void) {
 
             int64_t since_last = absolute_time_diff_us(t->last_execution, current_time);
             
-            // Calcolo del jitter senza filtri
+            // Calcolo del jitter
             int64_t jitter = since_last - t->interval;
             if (jitter < 0) jitter = -jitter;
             t->total_jitter += jitter;
@@ -259,63 +307,71 @@ void scheduler_run(void) {
             global_total_task_time += exec_time;
         } else {
             // Nessun task eseguibile, introduce un piccolo idle
-            // sleep_us(1000);
+            // sleep_us(100);
         }
     }
 }
-
-
-sched_error_t scheduler_set_algorithm(sched_algorithm_t algorithm) {
-    selected_algorithm = algorithm;
-    return SCHED_ERR_OK;
-}
-
 // -----------------------------------------------------------------------------
 // Stampa informazioni sui Task e Statistiche
 // -----------------------------------------------------------------------------
+
+// Funzioni di supporto
+const char* scheduler_algorithm_to_string(sched_algorithm_t algorithm) {
+    switch (algorithm) {
+        case SCHED_ALGO_PRIORITY: return "PRIORITY";
+        case SCHED_ALGO_ROUND_ROBIN: return "ROUND_ROBIN";
+        case SCHED_ALGO_EARLIEST_DEADLINE_FIRST: return "EARLIEST_DEADLINE_FIRST";
+        case SCHED_ALGO_LEAST_EXECUTED: return "LEAST_EXECUTED";
+        case SCHED_ALGO_LONGEST_WAITING: return "LONGEST_WAITING";
+        default: return "UNKNOWN";
+    }
+}
+
+static void print_task_info(int index, const task_t *task, int stack_used) {
+    printf("%-5d %-10s %-10s %-10d %-10d %-10lld %-10lld %-10lld %-10lld %-10lld %-10lld %-10zu\n",
+           index,
+           task->name,
+           task->state == TASK_RUNNING ? "RUNNING" : "PAUSED",
+           task->priority,
+           task->exec_count,
+           task->total_time,
+           (task->min_exec_time == INT64_MAX) ? 0 : task->min_exec_time,
+           task->max_exec_time,
+           task->exec_count > 0 ? (task->total_exec_time / task->exec_count) : 0,
+           task->max_jitter,
+           task->exec_count > 0 ? (task->total_jitter / task->exec_count) : 0,
+           stack_used + task->memory_allocated);
+}
+
+
 void scheduler_print_task_list(void) {
+    const char *algo_name = scheduler_algorithm_to_string(selected_algorithm);
+
     int64_t current_system_time = to_us_since_boot(get_absolute_time());
     double cpu_usage_percentage = ((double)global_total_task_time / (double)current_system_time) * 100.0;
 
-    // Calcolo memoria totale utilizzata dai task
+    // Calcolo memoria totale utilizzata
     size_t total_memory_usage = 0;
     for (int i = 0; i < task_count; i++) {
-        task_t *t = &task_list[i];
         int stack_used = calculate_stack_usage(task_stacks[i], TASK_STACK_SIZE);
-        total_memory_usage += (stack_used + t->memory_allocated);
+        total_memory_usage += (stack_used + task_list[i].memory_allocated);
     }
-
     double memory_usage_percentage = ((double)total_memory_usage / (double)RP2040_TOTAL_RAM) * 100.0;
 
+    // Stampa statistiche globali
     printf("\n--- Global Task Statistics ---\n");
+    printf("Scheduler Algorithm: %s\n", algo_name);
     printf("CPU Usage: %.2f%% (%lld us)\n", cpu_usage_percentage, global_total_task_time);
     printf("Total System Time: %lld us\n", current_system_time);
     printf("Total Memory Usage: %zu bytes (%.2f%% of total 264KB RAM)\n\n", total_memory_usage, memory_usage_percentage);
 
     printf("%-5s %-10s %-10s %-10s %-10s %-10s %-10s %-10s %-10s %-10s %-10s %-10s\n",
-           "PID", "Name", "State", "Priority", "ExecCount", "TotalTime",
-           "MinTime", "MaxTime", "AvgTime", "MaxJitter", "AvgJitter", "MemUsed");
+       "PID", "Name", "State", "Priority", "ExecCount", "TotalTime",
+       "MinTime", "MaxTime", "AvgTime", "MaxJitter", "AvgJitter", "MemUsed");
 
     for (int i = 0; i < task_count; i++) {
-        task_t *t = &task_list[i];
-        int64_t avg_time = t->exec_count > 0 ? (t->total_exec_time / t->exec_count) : 0;
-        int64_t avg_jitter = t->exec_count > 0 ? (t->total_jitter / t->exec_count) : 0;
         int stack_used = calculate_stack_usage(task_stacks[i], TASK_STACK_SIZE);
-
-        printf("%-5d %-10s %-10s %-10d %-10d %-10lld %-10lld %-10lld %-10lld %-10lld %-10lld %-10zu\n",
-               i,
-               t->name,
-               t->state == TASK_RUNNING ? "RUNNING" : "PAUSED",
-               t->priority,
-               t->exec_count,
-               t->total_time,
-               (t->min_exec_time == INT64_MAX) ? 0 : t->min_exec_time,
-               t->max_exec_time,
-               avg_time,
-               t->max_jitter,
-               avg_jitter,
-               t->memory_allocated + stack_used);
+        print_task_info(i, &task_list[i], stack_used);
     }
-
     printf("\n");
 }

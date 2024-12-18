@@ -6,8 +6,6 @@
 #include "initcalls.h"
 #include "hardware_cfg.h"
 
-#include "task_led.h"
-
 int main()
 {
     // Abilita la printf sulla UART0
@@ -18,9 +16,6 @@ int main()
 
     // Itera sull'array delle initcall ed esegui ogni funzione
     initcalls();
-
-    // Impostiamo l'algoritmo di scheduling che più si adatta alla natura dei nostri task 
-    scheduler_set_algorithm(SCHED_ALGO_ROUND_ROBIN); // ROUND_ROBIN sempre una garanzia
 
     // Avviamo lo scheduler
     scheduler_run();
