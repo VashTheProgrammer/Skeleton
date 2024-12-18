@@ -1,4 +1,4 @@
-#include "hardware_config.h"
+#include "hardware_cfg.h"
 
 // Definizione della configurazione per hardware V1
 const HardwareConfig hardware_v1 = {
@@ -7,8 +7,8 @@ const HardwareConfig hardware_v1 = {
     .uart1_tx_pin = 4,  //cross
     .uart1_rx_pin = 5,
     .uart1_baud = 5000000,
-// ESP32 side
-// AT+UART_DEF=5000000,8,1,0,3
+    // ESP32 side
+    // AT+UART_DEF=5000000,8,1,0,3
 
     .uart0_rts_pin = -1,
     .uart0_cts_pin = -1,

@@ -1,8 +1,8 @@
-#ifndef COMMANDS_H
-#define COMMANDS_H
+#ifndef TERMINAL_CMD_H
+#define TERMINAL_CMD_H
 
 #include "terminal.h"
 
 void init_commands(terminal_context_t *context);
 
-#endif // COMMANDS_H
+#endif // TERMINAL_CMD_H

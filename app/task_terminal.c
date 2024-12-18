@@ -4,10 +4,10 @@
 #include "hardware/irq.h"
 #include "hardware/gpio.h"
 
-#include "hardware_config.h"
+#include "hardware_cfg.h"
 #include "initcalls.h"
 #include "terminal.h"
-#include "commands.h"
+#include "terminal/cmd.h"
 
 #define DATA_BITS 8
 #define STOP_BITS 1
