@@ -3,8 +3,11 @@
 #include <stdlib.h>
 #include "hardware/watchdog.h"
 #include "terminal/cmd.h"
+
 #include "scheduler.h"
 #include "debug.h"
+#include "config.h"
+#include "flash.h"
 
 // SECRET
 #define PWD "1234" 
@@ -155,6 +158,151 @@ void cmd_debug_task(terminal_context_t *context, size_t argc, char **argv) {
     }
 }
 
+void cmd_set(terminal_context_t *context, size_t argc, char **argv) {
+    if (argc < 4) {
+        terminal_print_message("Usage: SET <key> <type> <value>\n", COLOR_RED, context);
+        return;
+    }
+
+    int key = atoi(argv[1]);
+    param_type_t type;
+    int result;
+
+    if (strcmp(argv[2], "INT") == 0) {
+        type = PARAM_TYPE_INT;
+        char *endptr;
+        int int_value = strtol(argv[3], &endptr, 10);
+        if (*endptr != '\0') {
+            terminal_print_message("Invalid integer value.\n", COLOR_RED, context);
+            return;
+        }
+        result = set_param(key, type, &int_value);
+    } else if (strcmp(argv[2], "FLOAT") == 0) {
+        type = PARAM_TYPE_FLOAT;
+        char *endptr;
+        float float_value = strtof(argv[3], &endptr);
+        if (*endptr != '\0') {
+            terminal_print_message("Invalid float value.\n", COLOR_RED, context);
+            return;
+        }
+        result = set_param(key, type, &float_value);
+    } else if (strcmp(argv[2], "STRING") == 0) {
+        type = PARAM_TYPE_STRING;
+
+        // Combina tutti gli argomenti successivi in una singola stringa
+        char string_value[64] = {0};
+        size_t len = 0;
+
+        for (int i = 3; i < argc; i++) {
+            if (len + strlen(argv[i]) + 1 >= sizeof(string_value)) {
+                terminal_print_message("String too long. Truncated.\n", COLOR_YELLOW, context);
+                break;
+            }
+            strncat(string_value, argv[i], sizeof(string_value) - len - 1);
+            len = strlen(string_value);
+            if (i < argc - 1) { // Aggiungi uno spazio tra gli argomenti
+                strncat(string_value, " ", sizeof(string_value) - len - 1);
+                len = strlen(string_value);
+            }
+        }
+
+        result = set_param(key, type, string_value);
+    } else {
+        terminal_print_message("Invalid type. Use INT, FLOAT, or STRING.\n", COLOR_RED, context);
+        return;
+    }
+
+    if (result == 0) {
+        terminal_print_message("Parameter set successfully.\n", COLOR_GREEN, context);
+    } else if (result == -2) {
+        terminal_print_message("Value out of range.\n", COLOR_RED, context);
+    } else {
+        terminal_print_message("Failed to set parameter.\n", COLOR_RED, context);
+    }
+}
+
+// Funzione cmd_list per mostrare solo i parametri inizializzati con statistiche
+void cmd_list(terminal_context_t *context, size_t argc, char **argv) {
+    terminal_print_message("Listing initialized parameters:\n", COLOR_BLUE, context);
+    size_t total_params = 0;
+    size_t int_count = 0, float_count = 0, string_count = 0;
+
+    for (size_t i = 0; i < MAX_PARAMS; i++) {
+       if (params[i].key >= 1 && params[i].type >= 0) { // Mostra solo parametri con chiave >= 1
+            total_params++;
+            char buffer[128];
+            switch (params[i].type) {
+                case PARAM_TYPE_INT:
+                    int_count++;
+                    snprintf(buffer, sizeof(buffer), "Key: %d, Type: INT, Value: %d\n", params[i].key, params[i].value.int_value);
+                    break;
+                case PARAM_TYPE_FLOAT:
+                    float_count++;
+                    snprintf(buffer, sizeof(buffer), "Key: %d, Type: FLOAT, Value: %.2f\n", params[i].key, params[i].value.float_value);
+                    break;
+                case PARAM_TYPE_STRING:
+                    string_count++;
+                    snprintf(buffer, sizeof(buffer), "Key: %d, Type: STRING, Value: %s\n", params[i].key, params[i].value.string_value);
+                    break;
+                default:
+                    continue; // Salta tipi sconosciuti
+            }
+            terminal_print_message(buffer, COLOR_GREEN, context);
+        }
+    }
+
+    size_t used_memory = get_config_params_memory_usage();
+    float percentage_sram = ((float)used_memory / (256 * 1024)) * 100.0; // SRAM totale = 256 KB
+    char mem_usage[128];
+    snprintf(mem_usage, sizeof(mem_usage),
+            "Total SRAM usage: %zu bytes (%.2f%% of available SRAM)\n",
+            used_memory, percentage_sram);
+    terminal_print_message(mem_usage, COLOR_YELLOW, context);
+
+    size_t flash_capacity = FLASH_SECTOR_SIZE; // Supponendo una dimensione del settore
+    size_t flash_used = sizeof(config_param_t) * MAX_PARAMS;
+    float percentage_flash = ((float)flash_used / flash_capacity) * 100.0;
+    char flash_usage[128];
+    snprintf(flash_usage, sizeof(flash_usage),
+            "Total Flash usage: %zu bytes (%.2f%% of reserved Flash)\n",
+            flash_used, percentage_flash);
+    terminal_print_message(flash_usage, COLOR_YELLOW, context);
+}
+
+void cmd_get(terminal_context_t *context, size_t argc, char **argv) {
+    if (argc < 2) {
+        terminal_print_message("Usage: GET <key>\n", COLOR_RED, context);
+        return;
+    }
+
+    int key = atoi(argv[1]);
+    config_param_t param;
+    if (get_param(key, &param) == 0) {
+        char buffer[128];
+        switch (param.type) {
+            case PARAM_TYPE_INT:
+                snprintf(buffer, sizeof(buffer), "Key: %d, Type: INT, Value: %d\n", param.key, param.value.int_value);
+                break;
+            case PARAM_TYPE_FLOAT:
+                snprintf(buffer, sizeof(buffer), "Key: %d, Type: FLOAT, Value: %.2f\n", param.key, param.value.float_value);
+                break;
+            case PARAM_TYPE_STRING:
+                snprintf(buffer, sizeof(buffer), "Key: %d, Type: STRING, Value: %s\n", param.key, param.value.string_value);
+                break;
+        }
+        terminal_print_message(buffer, COLOR_GREEN, context);
+    } else {
+        char error[64];
+        snprintf(error, sizeof(error), "Parameter with key %d not found.\n", key);
+        terminal_print_message(error, COLOR_RED, context);
+    }
+}
+
+void cmd_reset(terminal_context_t *context, size_t argc, char **argv) {
+    reset_params_to_defaults();
+    terminal_print_message("Parameters reset to defaults.\n", COLOR_GREEN, context);
+}
+
 void init_commands(terminal_context_t *context) {
     terminal_register_command(context, "HELP", "Mostra la lista dei comandi", cmd_help);
     terminal_register_command(context, "HISTORY", "Mostra lo storico dei comandi", cmd_history);
@@ -166,5 +314,9 @@ void init_commands(terminal_context_t *context) {
     terminal_register_command(context, "REBOOT", "Riavvia il dispositivo", cmd_reboot);
     terminal_register_command(context, "ALG", "Cambia l'algoritmo dello scheduler (es. ALG RR)", cmd_set_scheduler);
     terminal_register_command(context, "DBG", "Abilita/disabilita il debug per un task (es. DBG <id> EN or DI)", cmd_debug_task);
+    terminal_register_command(context, "SET", "Set a parameter", cmd_set);
+    terminal_register_command(context, "GET", "Get a parameter", cmd_get);
+    terminal_register_command(context, "LIST", "List all parameters", cmd_list);
+    terminal_register_command(context, "RESET", "Reset parameters to defaults", cmd_reset);
 }
 

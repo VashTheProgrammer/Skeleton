@@ -33,7 +33,7 @@ void task_led_init(void) {
     initialize_driver_led(&leds[1], hw_config->extra_gpio1); // Assign pin 26 to led2
 
     // Parametri: nome, funzione, priorità, intervallo in microsecondi, uso di memoria statica
-    if (scheduler_add_task("led01", task_led, 1, 50 * 1000, TASK_RUNNING ,sizeof(task_led_static_mem_t)) != SCHED_ERR_OK) {
+    if (scheduler_add_task("led01", task_led, 0, (1 * 1000 * 1000), TASK_RUNNING ,sizeof(task_led_static_mem_t)) != SCHED_ERR_OK) {
         printf("[LED TASK][ERROR] Errore nell'aggiunta di Blink.\n");
     }
 }

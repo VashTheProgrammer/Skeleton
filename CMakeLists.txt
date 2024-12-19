@@ -39,12 +39,15 @@ add_definitions(-DHARDWARE_DEFAULT)
 # Add executable. Default name is the project name, version 0.1
 add_executable(RT 
     main.c
+    secret.c
     system/scheduler_core.c
     system/initcalls.c
     system/terminal.c
     system/debug.c
+    system/config.c
     platform/hardware.c
     platform/driver_led.c
+    platform/flash.c
     app/task_led.c
     app/task_terminal.c
     app/terminal/cmd.c
@@ -62,6 +65,7 @@ target_link_libraries(RT
         pico_stdlib
         pico_multicore
         hardware_pwm
+        hardware_flash
         pico_time
         )
 

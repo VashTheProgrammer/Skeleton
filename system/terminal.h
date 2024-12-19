@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 #define CMD_BUFFER_SIZE 128
-#define HISTORY_SIZE 10
+#define HISTORY_SIZE 15
 #define MAX_ARGS 10
 #define MAX_COMMANDS 20
 
@@ -12,6 +12,7 @@
 #define COLOR_RED "\033[31m"
 #define COLOR_GREEN "\033[32m"
 #define COLOR_BLUE "\033[34m"
+#define COLOR_YELLOW "\033[33m"
 #define COLOR_RESET "\033[0m"
 
 // Dichiarazione anticipata della struttura per compatibilità

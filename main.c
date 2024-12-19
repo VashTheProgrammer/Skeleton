@@ -5,6 +5,7 @@
 #include "scheduler.h"
 #include "initcalls.h"
 #include "hardware_cfg.h"
+#include "config.h"
 
 int main()
 {
@@ -16,6 +17,9 @@ int main()
 
     // Itera sull'array delle initcall ed esegui ogni funzione
     initcalls();
+
+    // Inizializza il config con i parametri di secret.c 
+    init_params();
 
     // Avviamo lo scheduler
     scheduler_run();
