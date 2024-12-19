@@ -4,6 +4,7 @@
 #include "hardware/watchdog.h"
 #include "terminal/cmd.h"
 #include "scheduler.h"
+#include "debug.h"
 
 // SECRET
 #define PWD "1234" 
@@ -44,13 +45,13 @@ void cmd_reboot(terminal_context_t *context, size_t argc, char **argv) {
 
 void cmd_tasks(terminal_context_t *context, size_t argc, char **argv) {
     if (argc < 2) {
-        terminal_print_message("[SYSTEM][ERROR] Specificare un sottocomando (SETPRIO, HOLD, RESUME).\n", COLOR_RED, context);
+        terminal_print_message("[SYSTEM][ERROR] Specificare un sottocomando (PRIO, HOLD, RESUME).\n", COLOR_RED, context);
         return;
     }
 
     if (strcmp(argv[1], "PS") == 0) {
         scheduler_print_task_list();
-    } else if (strcmp(argv[1], "SETPRIO") == 0) {
+    } else if (strcmp(argv[1], "PRIO") == 0) {
         if (argc < 4) {
             terminal_print_message("[SYSTEM][ERROR] Specificare ID del task e nuova priorità.\n", COLOR_RED, context);
             return;
@@ -73,7 +74,7 @@ void cmd_tasks(terminal_context_t *context, size_t argc, char **argv) {
         } else {
             terminal_print_message("[SYSTEM][ERROR] ID task non valido.\n", COLOR_RED, context);
         }
-    } else if (strcmp(argv[1], "RESUME") == 0) {
+    } else if (strcmp(argv[1], "RUN") == 0) {
         if (argc < 3) {
             terminal_print_message("[SYSTEM][ERROR] Specificare ID del task.\n", COLOR_RED, context);
             return;
@@ -89,15 +90,23 @@ void cmd_tasks(terminal_context_t *context, size_t argc, char **argv) {
     }
 }
 
-void cmd_enable_vt100(terminal_context_t *context, size_t argc, char **argv) {
-    context->enable_vt100_features = 1;
-    terminal_print_message("[SYSTEM] VT100 abilitato.\n", COLOR_GREEN, context);
+void cmd_vt100(terminal_context_t *context, size_t argc, char **argv) {
+    if (argc < 2) {
+        terminal_print_message("[SYSTEM][ERROR] Specificare lo stato (EN or DI).\n", COLOR_RED, context);
+        return;
+    }
+
+    if (strcmp(argv[1], "EN") == 0) {
+        context->enable_vt100_features = 1;
+        terminal_print_message("[SYSTEM] VT100 abilitato.\n", COLOR_GREEN, context);
+    } else if (strcmp(argv[1], "DI") == 0) {
+        context->enable_vt100_features = 0;
+        terminal_print_message("[SYSTEM] VT100 disabilitato.\n", COLOR_BLUE, context);
+    } else {
+        terminal_print_message("[SYSTEM][ERROR] Stato non valido. Usa EN per abilitare o DI per disabilitare.\n", COLOR_RED, context);
+    }
 }
 
-void cmd_disable_vt100(terminal_context_t *context, size_t argc, char **argv) {
-    context->enable_vt100_features = 0;
-    terminal_print_message("[SYSTEM] VT100 disabilitato.\n", COLOR_BLUE, context);
-}
 
 void cmd_ps(terminal_context_t *context, size_t argc, char **argv) {
     scheduler_print_task_list();
@@ -130,16 +139,32 @@ void cmd_set_scheduler(terminal_context_t *context, size_t argc, char **argv) {
     terminal_print_message("[SYSTEM] Algoritmo dello scheduler aggiornato.\n", COLOR_GREEN, context);
 }
 
+void cmd_debug_task(terminal_context_t *context, size_t argc, char **argv) {
+    if (argc < 3) {
+        terminal_print_message("[SYSTEM][ERROR] Specificare l'ID del task e lo stato (EN or DI).\n", COLOR_RED, context);
+        return;
+    }
+
+    int task_id = atoi(argv[1]);
+    if (strcmp(argv[2], "EN") == 0) {
+        debug_enable_task(task_id);
+    } else if (strcmp(argv[2], "DI") == 0) {
+        debug_disable_task(task_id);
+    } else {
+        terminal_print_message("Errore: stato non valido. Usa ENABLE o DISABLE.\n", COLOR_RED, context);
+    }
+}
+
 void init_commands(terminal_context_t *context) {
     terminal_register_command(context, "HELP", "Mostra la lista dei comandi", cmd_help);
     terminal_register_command(context, "HISTORY", "Mostra lo storico dei comandi", cmd_history);
     terminal_register_command(context, "LOGIN", "Effettua il login", cmd_login);
     terminal_register_command(context, "LOGOUT", "Disconnette l'utente", cmd_logout);
-    terminal_register_command(context, "TASK", "Gestisce i task (SETPRIO, HOLD, RESUME)", cmd_tasks);
-    terminal_register_command(context, "ENABLE_VT100", "Abilita funzionalità VT100", cmd_enable_vt100);
-    terminal_register_command(context, "DISABLE_VT100", "Disabilita funzionalità VT100", cmd_disable_vt100);
+    terminal_register_command(context, "TASK", "Gestisce i task (PRIO, HOLD, RUN)", cmd_tasks);
+    terminal_register_command(context, "VT100", "Abilita/disabilita VT100 (es. VT100 EN or DI)", cmd_vt100);
     terminal_register_command(context, "PS", "Mostra la lista dei task attivi", cmd_ps);
     terminal_register_command(context, "REBOOT", "Riavvia il dispositivo", cmd_reboot);
-    terminal_register_command(context, "SET_ALGO", "Cambia l'algoritmo dello scheduler (es. SET_ALGO ROUND_ROBIN)", cmd_set_scheduler);
+    terminal_register_command(context, "ALG", "Cambia l'algoritmo dello scheduler (es. ALG RR)", cmd_set_scheduler);
+    terminal_register_command(context, "DBG", "Abilita/disabilita il debug per un task (es. DBG <id> EN or DI)", cmd_debug_task);
 }
 

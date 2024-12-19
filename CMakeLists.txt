@@ -42,6 +42,7 @@ add_executable(RT
     system/scheduler_core.c
     system/initcalls.c
     system/terminal.c
+    system/debug.c
     platform/hardware.c
     platform/driver_led.c
     app/task_led.c
