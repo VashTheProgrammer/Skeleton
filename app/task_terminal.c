@@ -17,45 +17,45 @@
 
 static char uart_rx_buffer[UART_RX_BUFFER_SIZE];
 static size_t uart_rx_index = 0;
-static terminal_context_t terminal_context; // Contesto globale del terminale
+static terminal_context_t terminal_context; // Global terminal context
 
-// Interrupt handler per UART
+// UART interrupt handler: Handles incoming UART data
 void uart_irq_handler() {
     while (uart_is_readable(uart0)) {
         char c = uart_getc(uart0);
 
-        // Echo del carattere ricevuto per visibilità
+        // Echo received character for debugging
         uart_putc(uart0, c);
 
-        if (c == '\n' || c == '\r') { // Fine del comando
-            uart_rx_buffer[uart_rx_index] = '\0'; // Termina la stringa
-            terminal_execute_command(&terminal_context, uart_rx_buffer); // Passa il comando al terminale
-            uart_rx_index = 0; // Resetta l'indice
+        if (c == '\n' || c == '\r') { // End of command
+            uart_rx_buffer[uart_rx_index] = '\0'; // Null-terminate the string
+            terminal_execute_command(&terminal_context, uart_rx_buffer); // Process the command
+            uart_rx_index = 0; // Reset the buffer index
         } else if (uart_rx_index < UART_RX_BUFFER_SIZE - 1) {
-            uart_rx_buffer[uart_rx_index++] = c; // Accumula il carattere
+            uart_rx_buffer[uart_rx_index++] = c; // Add character to buffer
         } else {
-            printf("[SYSTEM][ERROR] Buffer UART full.\n");
-            uart_rx_index = 0; // Resetta l'indice
+            printf("[SYSTEM][ERROR] UART0 buffer full.\n");
+            uart_rx_index = 0; // Reset the buffer index
         }
     }
 }
 
-// Inizializzazione della UART
+// Initializes UART and terminal functionalities
 void init_task_terminal() {
-
+    // Configure UART pins and settings
     uart_init(uart0, hw_config->uart0_baud);
     gpio_set_function(hw_config->uart0_tx_pin, GPIO_FUNC_UART);
     gpio_set_function(hw_config->uart0_rx_pin, GPIO_FUNC_UART);
     uart_set_format(uart0, DATA_BITS, STOP_BITS, PARITY);
     uart_set_hw_flow(uart0, true, true);
 
-    // Abilita interrupt
+    // Enable UART interrupts
     uart_set_irq_enables(uart0, true, false);
     irq_set_exclusive_handler(UART0_IRQ, uart_irq_handler);
     irq_set_enabled(UART0_IRQ, true);
 
-    // Inizializza la lista dei comandi
-    terminal_init(&terminal_context); // Inizializza il contesto del terminale
-    init_commands(&terminal_context); // Registra i comandi disponibili
+    // Initialize terminal context and register commands
+    terminal_init(&terminal_context);
+    init_commands(&terminal_context);
 }
 REGISTER_INITCALL(init_task_terminal);

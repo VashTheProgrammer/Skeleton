@@ -3,39 +3,43 @@
 
 #include <stddef.h>
 
+// Buffer and history sizes
 #define CMD_BUFFER_SIZE 128
 #define HISTORY_SIZE 15
 #define MAX_ARGS 10
 #define MAX_COMMANDS 20
 
-// codici per il VT100
+// VT100 color codes
 #define COLOR_RED "\033[31m"
 #define COLOR_GREEN "\033[32m"
 #define COLOR_BLUE "\033[34m"
 #define COLOR_YELLOW "\033[33m"
 #define COLOR_RESET "\033[0m"
 
-// Dichiarazione anticipata della struttura per compatibilità
+// Forward declaration of the terminal context structure for compatibility
 struct terminal_context_t;
 
+// Function pointer type for terminal commands
 typedef void (*terminal_command_handler_t)(struct terminal_context_t *context, size_t argc, char **argv);
 
+// Command structure
 typedef struct {
-    const char *command;
-    const char *description;
-    terminal_command_handler_t handler;
+    const char *command;               // Command keyword
+    const char *description;           // Description of the command
+    terminal_command_handler_t handler; // Function handler for the command
 } terminal_command_t;
 
+// Terminal context structure
 typedef struct terminal_context_t {
-    terminal_command_t command_table[MAX_COMMANDS];
-    size_t command_count;
-    char command_history[HISTORY_SIZE][CMD_BUFFER_SIZE];
-    int history_index;
-    int authenticated;
-    int enable_vt100_features; // Abilita/disabilita VT100
+    terminal_command_t command_table[MAX_COMMANDS]; // Table of registered commands
+    size_t command_count;                           // Number of registered commands
+    char command_history[HISTORY_SIZE][CMD_BUFFER_SIZE]; // Command history buffer
+    int history_index;                              // Current index in the history buffer
+    int authenticated;                              // Authentication state
+    int enable_vt100_features;                     // Flag to enable/disable VT100 features
 } terminal_context_t;
 
-// Funzioni principali
+// Terminal API
 void terminal_init(terminal_context_t *context);
 void terminal_register_command(terminal_context_t *context, const char *command, const char *description, terminal_command_handler_t handler);
 void terminal_execute_command(terminal_context_t *context, const char *cmd);

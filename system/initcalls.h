@@ -3,15 +3,16 @@
 
 #define MAX_INITCALLS 32
 
+// Structure for initialization functions
 typedef struct initcall_node {
-    void (*init_func)(void);  // Puntatore alla funzione di inizializzazione
+    void (*init_func)(void); // Pointer to the initialization function
 } initcall_node_t;
 
-// Array di initcalls e contatore
+// Array of initialization calls and counter
 extern initcall_node_t initcall_list[MAX_INITCALLS];
 extern int initcall_count;
 
-// Macro per registrare una funzione di inizializzazione
+// Macro to register an initialization function
 #define REGISTER_INITCALL(func) \
     static void __attribute__((constructor)) register_##func(void) { \
         if (initcall_count < MAX_INITCALLS) { \
@@ -19,6 +20,8 @@ extern int initcall_count;
         } \
     }
 
+// Executes all registered initialization functions
 void initcalls(void);
 
 #endif // INITCALLS_H
+

@@ -7,22 +7,27 @@
 #include "hardware_cfg.h"
 #include "config.h"
 
-int main()
-{
-    // Abilita la printf sulla UART0
+// Main entry point of the program
+int main() {
+    // Initialize UART0 for printf functionality
+    // This allows debug output and communication over UART
     stdio_init_all();
 
-    // Seleziona la configurazione hardware attuale
+    // Select the active hardware configuration
+    // Based on predefined macros, selects hardware_v1 or hardware_v2
     select_hardware_config();
 
-    // Itera sull'array delle initcall ed esegui ogni funzione
+    // Execute all registered initialization functions
+    // Uses the initcalls mechanism to set up drivers, hardware, and other modules
     initcalls();
 
-    // Inizializza il config con i parametri di secret.c 
+    // Initialize configuration parameters from `secret.c`
+    // Sets default system parameters for runtime operation
     init_params();
 
-    // Avviamo lo scheduler
+    // Start the scheduler to manage and execute tasks
+    // This enters an infinite loop to run scheduled tasks based on the selected algorithm
     scheduler_run();
 
-    return 0;
+    return 0; // Although unreachable, it's a standard practice
 }

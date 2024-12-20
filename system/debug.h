@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-// Macro per il debug legato a un task specifico
+// Macro for task-specific debug logging
 #define DEBUG_LOG_TASK(task_id, format, ...) \
     do { \
         if (debug_is_task_enabled(task_id)) { \
@@ -12,7 +12,7 @@
         } \
     } while (0)
 
-// API per il controllo del debug
+// API for debug control
 void debug_enable_task(int task_id);
 void debug_disable_task(int task_id);
 bool debug_is_task_enabled(int task_id);

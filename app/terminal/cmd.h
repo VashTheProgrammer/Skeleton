@@ -1,8 +1,9 @@
-#ifndef TERMINAL_CMD_H
-#define TERMINAL_CMD_H
+#ifndef CMD_H
+#define CMD_H
 
 #include "terminal.h"
 
+// Initializes and registers all terminal commands
 void init_commands(terminal_context_t *context);
 
-#endif // TERMINAL_CMD_H
+#endif // CMD_H

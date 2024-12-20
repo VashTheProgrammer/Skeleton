@@ -5,34 +5,39 @@
 #include <time.h>
 #include <pico/types.h>
 
-// CLASSE E OGGETTI IN C
-
-// Enum to represent the state of the LED
+// Enum to define LED states
 typedef enum {
     LED_OFF = 0,
     LED_ON = 1
 } LedState;
 
-// Struct specifically for LED operations
+/*
+ * Struct for LED driver operations.
+ * This approach mimics the class and object paradigm in object-oriented languages.
+ * - The struct acts as the "class" containing attributes (fields) and methods (function pointers).
+ * - Function pointers represent "methods" that operate on the instance ("object").
+ */
 typedef struct DriverLed {
-    int led_pin;
-    LedState led_state;
-    absolute_time_t fade_timer;
-    uint16_t fade_level;
-    uint16_t fade_target;
-    uint32_t fade_step_time;
-    bool fade_in_progress;
-    
-    void (*init)(struct DriverLed *driver, int gpio_pin);
-    void (*on)(struct DriverLed *driver);
-    void (*off)(struct DriverLed *driver);
-    void (*toggle)(struct DriverLed *driver);
-    void (*fade_in)(struct DriverLed *driver, uint32_t duration_ms);
-    void (*fade_out)(struct DriverLed *driver, uint32_t duration_ms);
-    void (*process_fade)(struct DriverLed *driver);
-    void (*set_brightness)(struct DriverLed *driver, uint8_t brightness);
+    int led_pin; // GPIO pin for the LED
+    LedState led_state; // Current state of the LED
+    absolute_time_t fade_timer; // Timer for fade operations
+    uint16_t fade_level; // Current brightness level
+    uint16_t fade_target; // Target brightness level
+    uint32_t fade_step_time; // Time per fade step (ms)
+    bool fade_in_progress; // Flag for ongoing fade
+
+    // Function pointers for LED operations
+    void (*init)(struct DriverLed *driver, int gpio_pin); // Constructor-like method
+    void (*on)(struct DriverLed *driver); // Turns LED on
+    void (*off)(struct DriverLed *driver); // Turns LED off
+    void (*toggle)(struct DriverLed *driver); // Toggles LED state
+    void (*fade_in)(struct DriverLed *driver, uint32_t duration_ms); // Fades LED in
+    void (*fade_out)(struct DriverLed *driver, uint32_t duration_ms); // Fades LED out
+    void (*process_fade)(struct DriverLed *driver); // Processes ongoing fades
+    void (*set_brightness)(struct DriverLed *driver, uint8_t brightness); // Sets specific brightness
 } DriverLed;
 
+// Initializes the LED driver
 void initialize_driver_led(DriverLed *driver, int gpio_pin);
 
 #endif // DRIVER_LED_H

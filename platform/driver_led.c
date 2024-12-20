@@ -2,8 +2,9 @@
 #include "hardware/pwm.h"
 #include "driver_led.h"
 
-// HAL implementation for LED on Raspberry Pi Pico
+// Hardware Abstraction Layer (HAL) for LED control on Raspberry Pi Pico
 
+// Initializes the LED driver with the specified GPIO pin
 void led_init(DriverLed *driver, int gpio_pin) {
     driver->led_pin = gpio_pin;
     driver->led_state = LED_OFF;
@@ -12,24 +13,27 @@ void led_init(DriverLed *driver, int gpio_pin) {
     gpio_set_function(driver->led_pin, GPIO_FUNC_PWM);
     uint slice_num = pwm_gpio_to_slice_num(driver->led_pin);
     pwm_config config = pwm_get_default_config();
-    pwm_config_set_wrap(&config, 255); // Set the PWM wrap value to 255 for 8-bit resolution
+    pwm_config_set_wrap(&config, 255); // 8-bit resolution
     pwm_init(slice_num, &config, true);
     pwm_set_gpio_level(driver->led_pin, 0); // Start with LED off
-    pwm_set_enabled(slice_num, true); // Enable the PWM output
+    pwm_set_enabled(slice_num, true);
 }
 
+// Turns the LED on (maximum brightness)
 void led_on(DriverLed *driver) {
     uint slice_num = pwm_gpio_to_slice_num(driver->led_pin);
-    pwm_set_gpio_level(driver->led_pin, 255); // Set maximum brightness
+    pwm_set_gpio_level(driver->led_pin, 255);
     driver->led_state = LED_ON;
 }
 
+// Turns the LED off (minimum brightness)
 void led_off(DriverLed *driver) {
     uint slice_num = pwm_gpio_to_slice_num(driver->led_pin);
-    pwm_set_gpio_level(driver->led_pin, 0); // Set minimum brightness
+    pwm_set_gpio_level(driver->led_pin, 0);
     driver->led_state = LED_OFF;
 }
 
+// Toggles the LED state between on and off
 void led_toggle(DriverLed *driver) {
     if (driver->led_state == LED_ON) {
         led_off(driver);
@@ -38,6 +42,7 @@ void led_toggle(DriverLed *driver) {
     }
 }
 
+// Initiates a fade-in effect for the LED over the specified duration
 void led_fade_in(DriverLed *driver, uint32_t duration_ms) {
     driver->fade_in_progress = true;
     driver->fade_target = 255;
@@ -46,6 +51,7 @@ void led_fade_in(DriverLed *driver, uint32_t duration_ms) {
     driver->fade_timer = make_timeout_time_ms(driver->fade_step_time);
 }
 
+// Initiates a fade-out effect for the LED over the specified duration
 void led_fade_out(DriverLed *driver, uint32_t duration_ms) {
     driver->fade_in_progress = true;
     driver->fade_target = 0;
@@ -54,16 +60,13 @@ void led_fade_out(DriverLed *driver, uint32_t duration_ms) {
     driver->fade_timer = make_timeout_time_ms(driver->fade_step_time);
 }
 
+// Processes ongoing fade effects, adjusting LED brightness step by step
 void led_process_fade(DriverLed *driver) {
     if (driver->fade_in_progress && time_reached(driver->fade_timer)) {
         if (driver->fade_level == driver->fade_target) {
             driver->fade_in_progress = false;
         } else {
-            if (driver->fade_target > driver->fade_level) {
-                driver->fade_level++;
-            } else {
-                driver->fade_level--;
-            }
+            driver->fade_level += (driver->fade_target > driver->fade_level) ? 1 : -1;
             uint slice_num = pwm_gpio_to_slice_num(driver->led_pin);
             pwm_set_gpio_level(driver->led_pin, driver->fade_level);
             driver->fade_timer = make_timeout_time_ms(driver->fade_step_time);
@@ -71,6 +74,7 @@ void led_process_fade(DriverLed *driver) {
     }
 }
 
+// Initializes and binds LED driver functions
 void initialize_driver_led(DriverLed *driver, int gpio_pin) {
     driver->init = led_init;
     driver->on = led_on;

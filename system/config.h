@@ -7,31 +7,32 @@
 
 #define MAX_PARAMS 20
 
-// Tipi di parametri
+// Types of configuration parameters
 typedef enum {
     PARAM_TYPE_INT,
     PARAM_TYPE_FLOAT,
     PARAM_TYPE_STRING
 } param_type_t;
 
+// Structure defining a configuration parameter
 typedef struct {
-    int key;                   // ID univoco del parametro
-    param_type_t type;         // Tipo del parametro
+    int key;                   // Unique ID of the parameter
+    param_type_t type;         // Type of the parameter
     union {
         int int_value;
         float float_value;
         char string_value[64];
-    } value;                   // Valore del parametro
+    } value;                   // Value of the parameter
     union {
         struct { int min; int max; } int_range;
         struct { float min; float max; } float_range;
-    } validation;              // Range di validazione
+    } validation;              // Validation range
 } config_param_t;
 
-// Dichiarazione globale dei parametri
+// Global parameter declarations
 extern config_param_t params[MAX_PARAMS];
 
-// Funzioni principali
+// Main configuration functions
 void init_params();
 size_t get_config_params_memory_usage();
 bool validate_param(const config_param_t *param);
@@ -40,5 +41,11 @@ int get_param(int key, config_param_t *out_param);
 void reset_params_to_defaults();
 void save_params_to_flash();
 void load_params_from_flash();
+
+/*
+ * Note: This configuration system relies on a `secret.c` file where
+ * default parameter values are defined. Ensure that this file is linked
+ * correctly during the build process.
+ */
 
 #endif // CONFIG_H
